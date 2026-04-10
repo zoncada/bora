@@ -17,6 +17,7 @@ const wss = new WebSocket.Server({ server });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bora-secret-key-2024';
 const PORT = process.env.PORT || 3000;
+const APP_URL = process.env.APP_URL || 'https://bora.valenzi.tech';
 
 // VAPID keys for push notifications
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
@@ -123,9 +124,16 @@ app.post('/api/groups', auth, (req, res) => {
   db.prepare('INSERT INTO groups (id, name, owner_id, invite_code) VALUES (?, ?, ?, ?)').run(id, name, req.user.userId, inviteCode);
   db.prepare('INSERT INTO group_members (group_id, user_id) VALUES (?, ?)').run(id, req.user.userId);
 
-  res.json({ id, name, inviteCode });
+  res.json({
+    id,
+    name,
+    inviteCode,
+    inviteLink: `${APP_URL}/join/${inviteCode}`,
+    isAdmin: true
+  });
 });
 
+// Join via code or link
 app.post('/api/groups/join', auth, (req, res) => {
   const { inviteCode } = req.body;
   const group = db.prepare('SELECT * FROM groups WHERE invite_code = ?').get(inviteCode?.toUpperCase());
@@ -135,27 +143,121 @@ app.post('/api/groups/join', auth, (req, res) => {
   if (existing) return res.status(400).json({ error: 'Você já está neste grupo' });
 
   db.prepare('INSERT INTO group_members (group_id, user_id) VALUES (?, ?)').run(group.id, req.user.userId);
-  res.json({ id: group.id, name: group.name, inviteCode: group.invite_code });
+
+  // Notify group admin
+  const adminWs = clients.get(group.owner_id);
+  if (adminWs && adminWs.readyState === WebSocket.OPEN) {
+    const newMember = db.prepare('SELECT id, name, avatar FROM users WHERE id = ?').get(req.user.userId);
+    adminWs.send(JSON.stringify({ event: 'member:joined', data: { groupId: group.id, member: newMember } }));
+  }
+
+  res.json({
+    id: group.id,
+    name: group.name,
+    inviteCode: group.invite_code,
+    inviteLink: `${APP_URL}/join/${group.invite_code}`,
+    isAdmin: false
+  });
 });
 
 app.get('/api/groups', auth, (req, res) => {
   const groups = db.prepare(`
-    SELECT g.id, g.name, g.invite_code as inviteCode,
+    SELECT g.id, g.name, g.invite_code as inviteCode, g.owner_id as ownerId,
            (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as memberCount
     FROM groups g
     INNER JOIN group_members gm ON g.id = gm.group_id
     WHERE gm.user_id = ?
+    ORDER BY g.created_at DESC
   `).all(req.user.userId);
-  res.json(groups);
+
+  const result = groups.map(g => ({
+    ...g,
+    inviteLink: `${APP_URL}/join/${g.inviteCode}`,
+    isAdmin: g.ownerId === req.user.userId
+  }));
+
+  res.json(result);
+});
+
+app.get('/api/groups/:id', auth, (req, res) => {
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(req.params.id, req.user.userId);
+  if (!isMember) return res.status(403).json({ error: 'Sem acesso' });
+
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+
+  const members = db.prepare(`
+    SELECT u.id, u.name, u.avatar, gm.joined_at FROM users u
+    INNER JOIN group_members gm ON u.id = gm.user_id
+    WHERE gm.group_id = ?
+    ORDER BY gm.joined_at ASC
+  `).all(req.params.id);
+
+  res.json({
+    id: group.id,
+    name: group.name,
+    inviteCode: group.invite_code,
+    inviteLink: `${APP_URL}/join/${group.invite_code}`,
+    ownerId: group.owner_id,
+    isAdmin: group.owner_id === req.user.userId,
+    memberCount: members.length,
+    members: members.map(m => ({
+      ...m,
+      isAdmin: m.id === group.owner_id
+    }))
+  });
 });
 
 app.get('/api/groups/:id/members', auth, (req, res) => {
+  const group = db.prepare('SELECT owner_id FROM groups WHERE id = ?').get(req.params.id);
   const members = db.prepare(`
     SELECT u.id, u.name, u.avatar FROM users u
     INNER JOIN group_members gm ON u.id = gm.user_id
     WHERE gm.group_id = ?
+    ORDER BY gm.joined_at ASC
   `).all(req.params.id);
-  res.json(members);
+
+  res.json(members.map(m => ({
+    ...m,
+    isAdmin: group && m.id === group.owner_id
+  })));
+});
+
+// Admin: remove member
+app.delete('/api/groups/:id/members/:userId', auth, (req, res) => {
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+  if (group.owner_id !== req.user.userId) return res.status(403).json({ error: 'Apenas o admin pode remover membros' });
+  if (req.params.userId === req.user.userId) return res.status(400).json({ error: 'Admin não pode se remover' });
+
+  db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+  broadcast(req.params.id, 'member:removed', { userId: req.params.userId });
+  res.json({ ok: true });
+});
+
+// Admin: transfer admin
+app.post('/api/groups/:id/transfer-admin', auth, (req, res) => {
+  const { newAdminId } = req.body;
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+  if (group.owner_id !== req.user.userId) return res.status(403).json({ error: 'Apenas o admin pode transferir' });
+
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(req.params.id, newAdminId);
+  if (!isMember) return res.status(400).json({ error: 'Usuário não é membro do grupo' });
+
+  db.prepare('UPDATE groups SET owner_id = ? WHERE id = ?').run(newAdminId, req.params.id);
+  broadcast(req.params.id, 'group:admin_changed', { newAdminId });
+  res.json({ ok: true });
+});
+
+// Leave group
+app.post('/api/groups/:id/leave', auth, (req, res) => {
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+  if (group.owner_id === req.user.userId) return res.status(400).json({ error: 'Admin não pode sair. Transfira o admin primeiro.' });
+
+  db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(req.params.id, req.user.userId);
+  res.json({ ok: true });
 });
 
 // ─── POLLS ROUTES ────────────────────────────────────────────────────────────
@@ -163,6 +265,10 @@ app.get('/api/groups/:id/members', auth, (req, res) => {
 app.post('/api/polls', auth, (req, res) => {
   const { question, options, deadline, groupId, mode } = req.body;
   if (!question || !options || !groupId) return res.status(400).json({ error: 'Dados incompletos' });
+
+  // Any member can create polls
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(groupId, req.user.userId);
+  if (!isMember) return res.status(403).json({ error: 'Você não é membro deste grupo' });
 
   const id = uuidv4();
   const optionsJson = JSON.stringify(options);
@@ -174,9 +280,8 @@ app.post('/api/polls', auth, (req, res) => {
   const poll = getPollWithStats(id, req.user.userId);
   broadcast(groupId, 'poll:new', poll);
 
-  // Schedule push notifications
   sendPushToGroup(groupId, req.user.userId, {
-    title: 'Nova votação no Bora!',
+    title: '🗳️ Nova votação no Bora!',
     body: question,
     data: { pollId: id }
   });
@@ -241,7 +346,11 @@ app.post('/api/polls/:id/vote', auth, (req, res) => {
 app.post('/api/polls/:id/close', auth, (req, res) => {
   const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(req.params.id);
   if (!poll) return res.status(404).json({ error: 'Votação não encontrada' });
-  if (poll.creator_id !== req.user.userId) return res.status(403).json({ error: 'Sem permissão' });
+
+  // Creator OR group admin can close
+  const group = db.prepare('SELECT owner_id FROM groups WHERE id = ?').get(poll.group_id);
+  const canClose = poll.creator_id === req.user.userId || (group && group.owner_id === req.user.userId);
+  if (!canClose) return res.status(403).json({ error: 'Sem permissão para encerrar' });
 
   db.prepare('UPDATE polls SET closed = 1 WHERE id = ?').run(req.params.id);
   const updated = getPollWithStats(req.params.id, req.user.userId);
@@ -284,6 +393,8 @@ app.get('/api/templates', auth, (req, res) => {
     { id: 3, name: 'Presente', icon: '🎁', question: 'Quem entra no presente?', options: ['Entro', 'Não entro', 'Talvez'] },
     { id: 4, name: 'Carona', icon: '🚗', question: 'Quem pode dar carona?', options: ['Posso', 'Não posso', 'Talvez'] },
     { id: 5, name: 'Reunião', icon: '📅', question: 'Quem pode na reunião?', options: ['Posso', 'Não posso', 'Talvez'] },
+    { id: 6, name: 'Jantar', icon: '🍕', question: 'Quem vai no jantar?', options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 7, name: 'Evento', icon: '🎉', question: 'Quem vai ao evento?', options: ['Vou', 'Não vou', 'Talvez'] },
   ]);
 });
 
@@ -297,6 +408,7 @@ function getPollWithStats(pollId, userId) {
   const votes = db.prepare('SELECT option, user_id FROM votes WHERE poll_id = ?').all(pollId);
   const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(poll.group_id).c;
   const creator = db.prepare('SELECT name FROM users WHERE id = ?').get(poll.creator_id);
+  const group = db.prepare('SELECT owner_id, name FROM groups WHERE id = ?').get(poll.group_id);
 
   const voteCounts = {};
   options.forEach(o => voteCounts[o] = 0);
@@ -319,6 +431,9 @@ function getPollWithStats(pollId, userId) {
     WHERE gm.group_id = ? AND u.id NOT IN (SELECT user_id FROM votes WHERE poll_id = ?)
   `).all(poll.group_id, pollId);
 
+  // Can close: creator or group admin
+  const canClose = userId === poll.creator_id || (group && group.owner_id === userId);
+
   return {
     id: poll.id,
     question: poll.question,
@@ -326,6 +441,7 @@ function getPollWithStats(pollId, userId) {
     voteCounts,
     deadline: poll.deadline,
     groupId: poll.group_id,
+    groupName: group?.name,
     creatorId: poll.creator_id,
     creatorName: creator?.name,
     mode: poll.mode,
@@ -336,6 +452,7 @@ function getPollWithStats(pollId, userId) {
     memberCount,
     respondedUsers,
     pendingUsers,
+    canClose,
     createdAt: poll.created_at
   };
 }

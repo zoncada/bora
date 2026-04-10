@@ -110,7 +110,7 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <span className="text-6xl mb-4">🎉</span>
             <h3 className="text-xl font-bold text-gray-800 mb-2">Nada pendente!</h3>
-            <p className="text-gray-400 text-sm mb-6">Crie uma votação para sua família decidir.</p>
+            <p className="text-gray-400 text-sm mb-6">Crie uma votação para o grupo decidir.</p>
             <button className="btn-primary max-w-xs" onClick={() => navigate('/create')}>
               Criar votação
             </button>

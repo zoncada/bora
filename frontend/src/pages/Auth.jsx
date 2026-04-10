@@ -40,7 +40,7 @@ export default function Auth() {
           {mode === 'login' ? 'Bem-vindo de volta' : 'Criar conta'}
         </h2>
         <p className="text-gray-400 text-sm mt-1">
-          {mode === 'login' ? 'Entre na sua conta' : 'Comece a decidir em família'}
+          {mode === 'login' ? 'Entre na sua conta' : 'Comece a decidir em grupo'}
         </p>
       </div>
 

@@ -15,7 +15,7 @@ export default function Onboarding() {
         />
 
         <p className="text-xl text-gray-500 text-center leading-relaxed mb-2">
-          Decisões rápidas em família.
+          Decisões rápidas em grupo.
         </p>
         <p className="text-base text-gray-400 text-center leading-relaxed">
           Sem enrolação. Sem chat. Só resposta.
@@ -23,8 +23,8 @@ export default function Onboarding() {
 
         {/* Feature pills */}
         <div className="flex flex-wrap gap-2 justify-center mt-8">
-          {['⚡ Velocidade', '👨‍👩‍👧 Família', '✅ Clareza', '🔔 Lembretes'].map((f) => (
-            <span key={f} className="px-3 py-1.5 bg-surface rounded-full text-sm text-gray-600 font-medium">
+          {['⚡ Velocidade', '👥 Grupos', '✅ Clareza', '🔔 Lembretes'].map((f) => (
+            <span key={f} className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-600 font-medium">
               {f}
             </span>
           ))}
@@ -38,7 +38,7 @@ export default function Onboarding() {
             { q: 'Quem vai no almoço de domingo?', a: '5 de 6 responderam' },
             { q: 'Quem topa a viagem no feriado?', a: '3 de 5 responderam' },
           ].map((ex) => (
-            <div key={ex.q} className="card flex items-center gap-3 py-3 px-4">
+            <div key={ex.q} className="bg-gray-50 rounded-2xl flex items-center gap-3 py-3 px-4">
               <span className="text-2xl">⚡</span>
               <div>
                 <p className="text-sm font-semibold text-gray-800">{ex.q}</p>
@@ -48,11 +48,14 @@ export default function Onboarding() {
           ))}
         </div>
 
-        <button className="btn-primary" onClick={() => navigate('/auth')}>
+        <button
+          className="w-full bg-teal-600 text-white font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform"
+          onClick={() => navigate('/auth')}
+        >
           Começar agora
         </button>
         <p className="text-center text-xs text-gray-400 mt-3">
-          Gratuito · Sem anúncios · Para família
+          Gratuito · Sem anúncios · Para grupos
         </p>
       </div>
     </div>

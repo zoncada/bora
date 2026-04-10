@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Onboarding from './pages/Onboarding';
 import Auth from './pages/Auth';
 import GroupSetup from './pages/GroupSetup';
+import GroupDetail from './pages/GroupDetail';
 import Home from './pages/Home';
 import CreatePoll from './pages/CreatePoll';
 import PollDetail from './pages/PollDetail';
@@ -43,6 +44,7 @@ function AppRoutes() {
       <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
       <Route path="/join/:code" element={<JoinRedirect />} />
       <Route path="/group-setup" element={<PrivateRoute><GroupSetup /></PrivateRoute>} />
+      <Route path="/group/:id" element={<PrivateRoute><GroupDetail /></PrivateRoute>} />
       <Route path="/home" element={<PrivateRoute><Home /></PrivateRoute>} />
       <Route path="/create" element={<PrivateRoute><CreatePoll /></PrivateRoute>} />
       <Route path="/poll/:id" element={<PrivateRoute><PollDetail /></PrivateRoute>} />

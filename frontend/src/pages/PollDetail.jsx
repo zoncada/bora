@@ -74,7 +74,7 @@ export default function PollDetail() {
 
   if (!poll) return null;
 
-  const isCreator = poll.creatorId === user?.id;
+  const canClose = poll.canClose; // backend retorna: criador OU admin do grupo
   const deadline = poll.deadline
     ? formatDistanceToNow(parseISO(poll.deadline), { addSuffix: true, locale: ptBR })
     : null;
@@ -88,7 +88,7 @@ export default function PollDetail() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="btn-ghost px-0">← Voltar</button>
           <div className="flex-1" />
-          {isCreator && !poll.closed && (
+          {canClose && !poll.closed && (
             <button onClick={handleClose} className="text-sm text-red-400 font-medium">
               Encerrar
             </button>

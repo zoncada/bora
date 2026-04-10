@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bora-v1';
-const STATIC_ASSETS = ['/', '/logo.png', '/manifest.json'];
+const CACHE_NAME = 'bora-v2';
+const STATIC_ASSETS = ['/', '/logo.png', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -30,10 +30,10 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   const data = e.data?.json() || {};
   e.waitUntil(
-    self.registration.showNotification(data.title || 'Bora!', {
+    self.registration.showNotification(data.title || 'Bora?', {
       body: data.body || 'Você tem uma nova votação.',
-      icon: '/logo.png',
-      badge: '/logo.png',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       data: data.data || {},
       vibrate: [100, 50, 100],
     })
