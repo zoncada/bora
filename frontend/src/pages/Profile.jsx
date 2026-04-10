@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNav from '../components/BottomNav';
+import AppHeader from '../components/AppHeader';
 import api from '../utils/api';
 
 const AVATAR_COLORS = ['#0D9488', '#F97316', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981'];
@@ -116,9 +117,7 @@ export default function Profile() {
 
   return (
     <div className="screen pb-24">
-      <div className="bg-white px-5 pt-14 pb-4 border-b border-gray-100 sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">Perfil</h1>
-      </div>
+      <AppHeader title="Perfil" />
 
       <div className="px-4 pt-5 space-y-4">
 

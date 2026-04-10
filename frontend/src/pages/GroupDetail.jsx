@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import AppHeader from '../components/AppHeader';
 import api from '../utils/api';
 
 export default function GroupDetail() {
@@ -111,25 +112,7 @@ export default function GroupDetail() {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white px-4 pt-14 pb-4 border-b border-gray-100">
-        <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-gray-500">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{group.name}</h1>
-            <p className="text-sm text-gray-400">{group.memberCount} {group.memberCount === 1 ? 'membro' : 'membros'}</p>
-          </div>
-          {group.isAdmin && (
-            <span className="ml-auto bg-teal-50 text-teal-600 text-xs font-semibold px-3 py-1 rounded-full">
-              Admin
-            </span>
-          )}
-        </div>
-      </div>
+      <AppHeader onBack={() => navigate(-1)} title={group.name} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 

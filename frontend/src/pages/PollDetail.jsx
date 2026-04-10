@@ -4,6 +4,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import AppHeader from '../components/AppHeader';
 import api from '../utils/api';
 
 const AVATAR_COLORS = ['#4F7CFF', '#FF6B6B', '#FFB347', '#47D1A8', '#A855F7', '#EC4899'];
@@ -83,18 +84,14 @@ export default function PollDetail() {
 
   return (
     <div className="flex flex-col h-full bg-surface">
-      {/* Header */}
-      <div className="bg-white px-5 pt-14 pb-4 border-b border-gray-50">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="btn-ghost px-0">← Voltar</button>
-          <div className="flex-1" />
-          {canClose && !poll.closed && (
-            <button onClick={handleClose} className="text-sm text-red-400 font-medium">
-              Encerrar
-            </button>
-          )}
+      <AppHeader onBack={() => navigate(-1)} title={poll.closed ? 'Resultado' : 'Votação'} />
+      {canClose && !poll.closed && (
+        <div className="px-5 pb-2 bg-white border-b border-gray-50">
+          <button onClick={handleClose} className="text-sm text-red-400 font-medium w-full text-right">
+            Encerrar votação
+          </button>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 pt-5 pb-8 space-y-4">
 

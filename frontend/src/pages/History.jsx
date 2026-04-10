@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
+import AppHeader from '../components/AppHeader';
 import api from '../utils/api';
 
 export default function History() {
@@ -19,10 +20,7 @@ export default function History() {
 
   return (
     <div className="screen pb-20">
-      <div className="bg-white px-5 pt-14 pb-4 border-b border-gray-50 sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">Histórico</h1>
-        <p className="text-gray-400 text-sm">Decisões encerradas</p>
-      </div>
+      <AppHeader title="Histórico" />
 
       <div className="px-5 pt-4">
         {loading ? (
