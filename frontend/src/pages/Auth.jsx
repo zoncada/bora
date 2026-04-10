@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Auth() {
@@ -11,6 +11,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +24,12 @@ export default function Auth() {
         if (!name.trim()) { setError('Digite seu nome'); setLoading(false); return; }
         await register(name.trim(), email, password);
       }
-      navigate('/home');
+      const joinCode = searchParams.get('join');
+      if (joinCode) {
+        navigate(`/group-setup?code=${joinCode}`);
+      } else {
+        navigate('/home');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Algo deu errado. Tente novamente.');
     } finally {

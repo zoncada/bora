@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Onboarding from './pages/Onboarding';
 import Auth from './pages/Auth';
@@ -32,7 +32,7 @@ function PublicRoute({ children }) {
 
 function JoinRedirect() {
   const { user } = useAuth();
-  const code = window.location.pathname.split('/join/')[1];
+  const { code } = useParams();
   if (user) return <Navigate to={`/group-setup?code=${code}`} replace />;
   return <Navigate to={`/auth?join=${code}`} replace />;
 }
