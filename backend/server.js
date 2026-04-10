@@ -61,6 +61,11 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // WebSocket clients map: userId -> ws
 const clients = new Map();
 
+// Handle WebSocket server-level errors (prevents crash)
+wss.on('error', (err) => {
+  console.error('[WSS] Server error:', err.message);
+});
+
 wss.on('connection', (ws, req) => {
   const params = new URLSearchParams(req.url.replace('/?', ''));
   const token = params.get('token');
@@ -73,6 +78,13 @@ wss.on('connection', (ws, req) => {
       clients.set(userId, ws);
     } catch (e) {}
   }
+
+  // Handle per-connection errors (prevents crash on invalid frames)
+  ws.on('error', (err) => {
+    console.error('[WS] Client error:', err.message);
+    if (userId) clients.delete(userId);
+    try { ws.terminate(); } catch (e) {}
+  });
 
   ws.on('close', () => {
     if (userId) clients.delete(userId);
