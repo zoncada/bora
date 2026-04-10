@@ -21,20 +21,25 @@ export default function JoinGroup() {
 
     // Logado → tenta entrar no grupo automaticamente
     setStatus('joining');
-    api.post('/api/groups/join', { inviteCode: code.toUpperCase() })
-      .then(() => {
+    const codeClean = (code || '').trim().toUpperCase();
+    console.log('[JoinGroup] Tentando entrar com código:', codeClean);
+    api.post('/api/groups/join', { inviteCode: codeClean })
+      .then((res) => {
+        console.log('[JoinGroup] Sucesso:', res.data);
         setStatus('success');
         setTimeout(() => navigate('/home', { replace: true }), 1200);
       })
       .catch((err) => {
         const msg = err.response?.data?.error || '';
+        const status = err.response?.status;
+        console.error('[JoinGroup] Erro:', status, msg, 'código:', codeClean);
         // Se já é membro → vai para Home silenciosamente
         if (msg.includes('já está') || msg.includes('already')) {
           navigate('/home', { replace: true });
           return;
         }
         setStatus('error');
-        setTimeout(() => navigate('/home', { replace: true }), 2500);
+        setTimeout(() => navigate('/home', { replace: true }), 3000);
       });
   }, [code, user, loading, navigate]);
 

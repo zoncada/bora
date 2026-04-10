@@ -11,15 +11,32 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('bora_token');
     const savedUser = localStorage.getItem('bora_user');
     if (token && savedUser) {
-      setUserState(JSON.parse(savedUser));
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Refresh user from API to get latest avatarUrl
-      api.get('/api/auth/me').then(({ data }) => {
-        setUserState(data);
-        localStorage.setItem('bora_user', JSON.stringify(data));
-      }).catch(() => {});
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        // Define o token no axios ANTES de qualquer coisa
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        // Define o user e loading=false juntos (mesmo batch do React)
+        setUserState(parsedUser);
+        setLoading(false);
+        // Refresh silencioso em background
+        api.get('/api/auth/me').then(({ data }) => {
+          setUserState(data);
+          localStorage.setItem('bora_user', JSON.stringify(data));
+        }).catch(() => {
+          // Token expirado — logout silencioso
+          localStorage.removeItem('bora_token');
+          localStorage.removeItem('bora_user');
+          delete api.defaults.headers.common['Authorization'];
+          setUserState(null);
+        });
+      } catch {
+        localStorage.removeItem('bora_token');
+        localStorage.removeItem('bora_user');
+        setLoading(false);
+      }
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const setUser = (updater) => {
