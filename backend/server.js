@@ -196,32 +196,51 @@ app.post('/api/groups', auth, (req, res) => {
 
 // Join via code or link
 app.post('/api/groups/join', auth, (req, res) => {
-  const { inviteCode } = req.body;
-  const group = db.prepare('SELECT * FROM groups WHERE invite_code = ?').get(inviteCode?.toUpperCase());
-  if (!group) return res.status(404).json({ error: 'Código inválido' });
+  try {
+    const { inviteCode } = req.body;
+    if (!inviteCode) return res.status(400).json({ error: 'Código de convite obrigatório' });
 
-  const existing = db.prepare('SELECT id FROM group_members WHERE group_id = ? AND user_id = ?').get(group.id, req.user.userId);
-  if (existing) return res.status(400).json({ error: 'Você já está neste grupo' });
+    const group = db.prepare('SELECT * FROM groups WHERE invite_code = ?').get(inviteCode.trim().toUpperCase());
+    if (!group) return res.status(404).json({ error: 'Código inválido' });
 
-  db.prepare('INSERT INTO group_members (group_id, user_id) VALUES (?, ?)').run(group.id, req.user.userId);
+    // Verificar se já é membro (inclui o dono)
+    const existing = db.prepare('SELECT group_id FROM group_members WHERE group_id = ? AND user_id = ?').get(group.id, req.user.userId);
+    if (existing) {
+      // Já é membro — retorna sucesso silencioso
+      const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(group.id).c;
+      return res.json({
+        id: group.id,
+        name: group.name,
+        inviteCode: group.invite_code,
+        inviteLink: `${APP_URL}/join/${group.invite_code}`,
+        isAdmin: group.owner_id === req.user.userId,
+        memberCount,
+        alreadyMember: true
+      });
+    }
 
-  // Notify group admin
-  const adminWs = clients.get(group.owner_id);
-  if (adminWs && adminWs.readyState === WebSocket.OPEN) {
-    const newMember = db.prepare('SELECT id, name, avatar, avatar_url FROM users WHERE id = ?').get(req.user.userId);
-    adminWs.send(JSON.stringify({ event: 'member:joined', data: { groupId: group.id, member: newMember } }));
+    db.prepare('INSERT INTO group_members (group_id, user_id) VALUES (?, ?)').run(group.id, req.user.userId);
+
+    // Notificar o dono do grupo
+    const adminWs = clients.get(group.owner_id);
+    if (adminWs && adminWs.readyState === WebSocket.OPEN) {
+      const newMember = db.prepare('SELECT id, name, avatar, avatar_url FROM users WHERE id = ?').get(req.user.userId);
+      adminWs.send(JSON.stringify({ event: 'member:joined', data: { groupId: group.id, member: newMember } }));
+    }
+
+    const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(group.id).c;
+    res.json({
+      id: group.id,
+      name: group.name,
+      inviteCode: group.invite_code,
+      inviteLink: `${APP_URL}/join/${group.invite_code}`,
+      isAdmin: false,
+      memberCount
+    });
+  } catch (err) {
+    console.error('[join] Erro:', err.message);
+    res.status(500).json({ error: 'Erro interno ao entrar no grupo: ' + err.message });
   }
-
-  const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(group.id).c;
-
-  res.json({
-    id: group.id,
-    name: group.name,
-    inviteCode: group.invite_code,
-    inviteLink: `${APP_URL}/join/${group.invite_code}`,
-    isAdmin: false,
-    memberCount
-  });
 });
 
 app.get('/api/groups', auth, (req, res) => {
