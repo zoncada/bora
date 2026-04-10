@@ -146,7 +146,13 @@ export default function GroupSetup() {
       await api.post('/api/groups/join', { inviteCode: inviteCode.trim() });
       navigate('/home');
     } catch (err) {
-      setError(err.response?.data?.error || 'Código inválido');
+      const msg = err.response?.data?.error || '';
+      // Se já é membro, redireciona para Home em vez de mostrar erro
+      if (msg.includes('já está') || msg.includes('already')) {
+        navigate('/home');
+        return;
+      }
+      setError(msg || 'Código inválido');
     } finally {
       setLoading(false);
     }
