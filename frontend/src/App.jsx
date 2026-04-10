@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Onboarding from './pages/Onboarding';
 import Auth from './pages/Auth';
@@ -9,6 +9,7 @@ import CreatePoll from './pages/CreatePoll';
 import PollDetail from './pages/PollDetail';
 import History from './pages/History';
 import Profile from './pages/Profile';
+import JoinGroup from './pages/JoinGroup';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -30,19 +31,12 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/home" replace />;
 }
 
-function JoinRedirect() {
-  const { user } = useAuth();
-  const { code } = useParams();
-  if (user) return <Navigate to={`/group-setup?code=${code}`} replace />;
-  return <Navigate to={`/auth?join=${code}`} replace />;
-}
-
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoute><Onboarding /></PublicRoute>} />
       <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-      <Route path="/join/:code" element={<JoinRedirect />} />
+      <Route path="/join/:code" element={<JoinGroup />} />
       <Route path="/group-setup" element={<PrivateRoute><GroupSetup /></PrivateRoute>} />
       <Route path="/group/:id" element={<PrivateRoute><GroupDetail /></PrivateRoute>} />
       <Route path="/home" element={<PrivateRoute><Home /></PrivateRoute>} />
