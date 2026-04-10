@@ -6,7 +6,7 @@ services:
     container_name: bora-app
     restart: unless-stopped
     ports:
-      - "3005:3000"
+      - "127.0.0.1:3005:3000"
     volumes:
       - bora-data:/app/data
     environment:
@@ -16,13 +16,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:-bora-super-secret-change-in-production}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls}
-      - VIRTUAL_HOST=${DOMAIN:-bora.valenzi.tech}
-      - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=${DOMAIN:-bora.valenzi.tech}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-admin@valenzi.tech}
-    networks:
-      - nginx-proxy
-      - default
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/push/vapid-key"]
       interval: 30s
@@ -33,9 +26,3 @@ services:
 volumes:
   bora-data:
     driver: local
-
-networks:
-  nginx-proxy:
-    external: true
-  default:
-    driver: bridge
