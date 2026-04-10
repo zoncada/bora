@@ -446,7 +446,38 @@ app.post('/api/polls/:id/close', auth, (req, res) => {
   res.json(updated);
 });
 
-// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+// Deletar votação (apenas criador, sem votos)
+app.delete('/api/polls/:id', auth, (req, res) => {
+  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(req.params.id);
+  if (!poll) return res.status(404).json({ error: 'Votação não encontrada' });
+  if (poll.creator_id !== req.user.userId) return res.status(403).json({ error: 'Sem permissão para deletar' });
+  const voteCount = db.prepare('SELECT COUNT(*) as c FROM votes WHERE poll_id = ?').get(req.params.id).c;
+  if (voteCount > 0) return res.status(400).json({ error: 'Não é possível deletar uma votação com votos' });
+  db.prepare('DELETE FROM polls WHERE id = ?').run(req.params.id);
+  broadcast(poll.group_id, 'poll:deleted', { id: req.params.id });
+  res.json({ ok: true });
+});
+
+// Editar votação (apenas criador, sem votos, não encerrada)
+app.put('/api/polls/:id', auth, (req, res) => {
+  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(req.params.id);
+  if (!poll) return res.status(404).json({ error: 'Votação não encontrada' });
+  if (poll.creator_id !== req.user.userId) return res.status(403).json({ error: 'Sem permissão para editar' });
+  if (poll.closed) return res.status(400).json({ error: 'Não é possível editar uma votação encerrada' });
+  const voteCount = db.prepare('SELECT COUNT(*) as c FROM votes WHERE poll_id = ?').get(req.params.id).c;
+  if (voteCount > 0) return res.status(400).json({ error: 'Não é possível editar uma votação com votos' });
+  const { question, options, deadline, mode } = req.body;
+  if (!question?.trim()) return res.status(400).json({ error: 'Pergunta obrigatória' });
+  const validOptions = (options || []).filter(o => o.trim());
+  if (validOptions.length < 2) return res.status(400).json({ error: 'Mínimo 2 opções' });
+  db.prepare('UPDATE polls SET question = ?, options = ?, deadline = ?, mode = ? WHERE id = ?')
+    .run(question.trim(), JSON.stringify(validOptions), deadline || null, mode || poll.mode, req.params.id);
+  const updated = getPollWithStats(req.params.id, req.user.userId);
+  broadcast(poll.group_id, 'poll:updated', updated);
+  res.json(updated);
+});
+
+// ─── PUSH NOTIFICATIONS ─────────────────────────────────────────────────────────────────────────────────
 
 app.post('/api/push/subscribe', auth, (req, res) => {
   const { subscription } = req.body;

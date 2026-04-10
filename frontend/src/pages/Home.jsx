@@ -80,6 +80,8 @@ export default function Home() {
       });
     } else if (event === 'poll:updated') {
       setPolls((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+    } else if (event === 'poll:deleted') {
+      setPolls((prev) => prev.filter((p) => p.id !== data.id));
     }
   }, []);
 

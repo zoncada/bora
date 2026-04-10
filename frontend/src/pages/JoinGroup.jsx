@@ -5,11 +5,14 @@ import api from '../utils/api';
 
 export default function JoinGroup() {
   const { code } = useParams();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('joining'); // joining | success | error
+  const [status, setStatus] = useState('loading'); // loading | joining | success | error
 
   useEffect(() => {
+    // Aguarda o AuthContext terminar de carregar o usuário do localStorage
+    if (loading) return;
+
     if (!user) {
       // Não logado → vai para login preservando o código
       navigate(`/auth?join=${code}`, { replace: true });
@@ -17,10 +20,11 @@ export default function JoinGroup() {
     }
 
     // Logado → tenta entrar no grupo automaticamente
+    setStatus('joining');
     api.post('/api/groups/join', { inviteCode: code.toUpperCase() })
       .then(() => {
         setStatus('success');
-        setTimeout(() => navigate('/home', { replace: true }), 1000);
+        setTimeout(() => navigate('/home', { replace: true }), 1200);
       })
       .catch((err) => {
         const msg = err.response?.data?.error || '';
@@ -30,19 +34,21 @@ export default function JoinGroup() {
           return;
         }
         setStatus('error');
-        setTimeout(() => navigate('/home', { replace: true }), 2000);
+        setTimeout(() => navigate('/home', { replace: true }), 2500);
       });
-  }, [code, user, navigate]);
+  }, [code, user, loading, navigate]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-white px-6">
       <img src="/logo.png" alt="Bora?" className="w-40 mb-8"
         onError={(e) => { e.target.style.display = 'none'; }} />
 
-      {status === 'joining' && (
+      {(status === 'loading' || status === 'joining') && (
         <>
           <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 text-lg font-medium">Entrando no grupo...</p>
+          <p className="text-gray-600 text-lg font-medium">
+            {status === 'loading' ? 'Verificando...' : 'Entrando no grupo...'}
+          </p>
         </>
       )}
 
