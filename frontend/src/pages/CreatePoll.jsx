@@ -3,11 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 
 const TEMPLATES = [
-  { icon: '🍽️', name: 'Almoço', question: 'Quem vai no almoço?', options: ['Vou', 'Não vou', 'Talvez'] },
-  { icon: '✈️', name: 'Viagem', question: 'Quem topa a viagem?', options: ['Topo', 'Não posso', 'Talvez'] },
-  { icon: '🎁', name: 'Presente', question: 'Quem entra no presente?', options: ['Entro', 'Não entro', 'Talvez'] },
-  { icon: '🚗', name: 'Carona', question: 'Quem pode dar carona?', options: ['Posso', 'Não posso', 'Talvez'] },
-  { icon: '📅', name: 'Reunião', question: 'Quem pode na reunião?', options: ['Posso', 'Não posso', 'Talvez'] },
+  { icon: '🍽️', name: 'Almoço',    question: 'Quem vai no almoço?',          options: ['Vou', 'Não vou', 'Talvez'] },
+  { icon: '🍕', name: 'Jantar',    question: 'Quem vai no jantar?',           options: ['Vou', 'Não vou', 'Talvez'] },
+  { icon: '✈️', name: 'Viagem',    question: 'Quem topa a viagem?',           options: ['Topo', 'Não posso', 'Talvez'] },
+  { icon: '🚴', name: 'Pedal',     question: 'Quem vai no pedal?',            options: ['Vou', 'Não vou', 'Talvez'] },
+  { icon: '🚗', name: 'Carona',    question: 'Quem pode dar carona?',         options: ['Posso', 'Não posso', 'Talvez'] },
+  { icon: '🎁', name: 'Presente',  question: 'Quem entra no presente?',       options: ['Entro', 'Não entro', 'Talvez'] },
+  { icon: '📅', name: 'Reunião',   question: 'Quem pode na reunião?',         options: ['Posso', 'Não posso', 'Talvez'] },
+  { icon: '🎉', name: 'Evento',    question: 'Quem vai ao evento?',           options: ['Vou', 'Não vou', 'Talvez'] },
+  { icon: '🥩', name: 'Churrasco', question: 'Quem vai no churrasco?',        options: ['Vou', 'Não vou', 'Talvez'] },
+  { icon: '⚽', name: 'Futebol',   question: 'Quem joga no futebol?',         options: ['Jogo', 'Não jogo', 'Talvez'] },
 ];
 
 export default function CreatePoll() {

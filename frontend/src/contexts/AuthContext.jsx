@@ -4,25 +4,38 @@ import api from '../utils/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUserState] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('bora_token');
     const savedUser = localStorage.getItem('bora_user');
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      setUserState(JSON.parse(savedUser));
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Refresh user from API to get latest avatarUrl
+      api.get('/api/auth/me').then(({ data }) => {
+        setUserState(data);
+        localStorage.setItem('bora_user', JSON.stringify(data));
+      }).catch(() => {});
     }
     setLoading(false);
   }, []);
+
+  const setUser = (updater) => {
+    setUserState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localStorage.setItem('bora_user', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const login = async (email, password) => {
     const { data } = await api.post('/api/auth/login', { email, password });
     localStorage.setItem('bora_token', data.token);
     localStorage.setItem('bora_user', JSON.stringify(data.user));
     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-    setUser(data.user);
+    setUserState(data.user);
     return data;
   };
 
@@ -31,7 +44,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('bora_token', data.token);
     localStorage.setItem('bora_user', JSON.stringify(data.user));
     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-    setUser(data.user);
+    setUserState(data.user);
     return data;
   };
 
@@ -39,11 +52,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('bora_token');
     localStorage.removeItem('bora_user');
     delete api.defaults.headers.common['Authorization'];
-    setUser(null);
+    setUserState(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

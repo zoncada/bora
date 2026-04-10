@@ -17,6 +17,7 @@ db.exec(`
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     avatar TEXT,
+    avatar_url TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -69,5 +70,12 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 `);
+
+// Migration: add avatar_url column if not exists (for existing databases)
+try {
+  db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+} catch (e) {
+  // Column already exists, ignore
+}
 
 module.exports = db;

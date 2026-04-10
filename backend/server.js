@@ -7,6 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
+const multer = require('multer');
+const fs = require('fs');
 require('dotenv').config();
 
 const db = require('./database');
@@ -29,9 +31,32 @@ webpush.setVapidDetails(
   VAPID_PRIVATE_KEY
 );
 
+// ─── MULTER (foto de perfil) ──────────────────────────────────────────────────
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `avatar_${req.user.userId}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) return cb(new Error('Apenas imagens'));
+    cb(null, true);
+  }
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// Serve uploaded avatars
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // WebSocket clients map: userId -> ws
 const clients = new Map();
@@ -76,7 +101,7 @@ function auth(req, res, next) {
   }
 }
 
-// ─── AUTH ROUTES ────────────────────────────────────────────────────────────
+// ─── AUTH ROUTES ─────────────────────────────────────────────────────────────
 
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
@@ -92,7 +117,7 @@ app.post('/api/auth/register', async (req, res) => {
   db.prepare('INSERT INTO users (id, name, email, password, avatar) VALUES (?, ?, ?, ?, ?)').run(id, name, email, hash, avatar);
 
   const token = jwt.sign({ userId: id, name }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, name, email, avatar } });
+  res.json({ token, user: { id, name, email, avatar, avatarUrl: null } });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -104,15 +129,38 @@ app.post('/api/auth/login', async (req, res) => {
   if (!valid) return res.status(400).json({ error: 'Senha incorreta' });
 
   const token = jwt.sign({ userId: user.id, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar, avatarUrl: user.avatar_url || null } });
 });
 
 app.get('/api/auth/me', auth, (req, res) => {
-  const user = db.prepare('SELECT id, name, email, avatar FROM users WHERE id = ?').get(req.user.userId);
-  res.json(user);
+  const user = db.prepare('SELECT id, name, email, avatar, avatar_url FROM users WHERE id = ?').get(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+  res.json({ ...user, avatarUrl: user.avatar_url || null });
 });
 
-// ─── GROUPS ROUTES ───────────────────────────────────────────────────────────
+// Update profile (name)
+app.put('/api/auth/profile', auth, (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Nome obrigatório' });
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.trim(), req.user.userId);
+  const user = db.prepare('SELECT id, name, email, avatar, avatar_url FROM users WHERE id = ?').get(req.user.userId);
+  res.json({ ...user, avatarUrl: user.avatar_url || null });
+});
+
+// Upload avatar photo
+app.post('/api/auth/avatar', auth, (req, res, next) => {
+  upload.single('avatar')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'Arquivo não enviado' });
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatarUrl, req.user.userId);
+
+    res.json({ avatarUrl });
+  });
+});
+
+// ─── GROUPS ROUTES ────────────────────────────────────────────────────────────
 
 app.post('/api/groups', auth, (req, res) => {
   const { name } = req.body;
@@ -129,7 +177,8 @@ app.post('/api/groups', auth, (req, res) => {
     name,
     inviteCode,
     inviteLink: `${APP_URL}/join/${inviteCode}`,
-    isAdmin: true
+    isAdmin: true,
+    memberCount: 1
   });
 });
 
@@ -147,16 +196,19 @@ app.post('/api/groups/join', auth, (req, res) => {
   // Notify group admin
   const adminWs = clients.get(group.owner_id);
   if (adminWs && adminWs.readyState === WebSocket.OPEN) {
-    const newMember = db.prepare('SELECT id, name, avatar FROM users WHERE id = ?').get(req.user.userId);
+    const newMember = db.prepare('SELECT id, name, avatar, avatar_url FROM users WHERE id = ?').get(req.user.userId);
     adminWs.send(JSON.stringify({ event: 'member:joined', data: { groupId: group.id, member: newMember } }));
   }
+
+  const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(group.id).c;
 
   res.json({
     id: group.id,
     name: group.name,
     inviteCode: group.invite_code,
     inviteLink: `${APP_URL}/join/${group.invite_code}`,
-    isAdmin: false
+    isAdmin: false,
+    memberCount
   });
 });
 
@@ -187,7 +239,7 @@ app.get('/api/groups/:id', auth, (req, res) => {
   if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
 
   const members = db.prepare(`
-    SELECT u.id, u.name, u.avatar, gm.joined_at FROM users u
+    SELECT u.id, u.name, u.avatar, u.avatar_url, gm.joined_at FROM users u
     INNER JOIN group_members gm ON u.id = gm.user_id
     WHERE gm.group_id = ?
     ORDER BY gm.joined_at ASC
@@ -202,25 +254,49 @@ app.get('/api/groups/:id', auth, (req, res) => {
     isAdmin: group.owner_id === req.user.userId,
     memberCount: members.length,
     members: members.map(m => ({
-      ...m,
+      id: m.id,
+      name: m.name,
+      avatar: m.avatar,
+      avatarUrl: m.avatar_url || null,
+      joinedAt: m.joined_at,
       isAdmin: m.id === group.owner_id
     }))
   });
 });
 
-app.get('/api/groups/:id/members', auth, (req, res) => {
-  const group = db.prepare('SELECT owner_id FROM groups WHERE id = ?').get(req.params.id);
-  const members = db.prepare(`
-    SELECT u.id, u.name, u.avatar FROM users u
-    INNER JOIN group_members gm ON u.id = gm.user_id
-    WHERE gm.group_id = ?
-    ORDER BY gm.joined_at ASC
-  `).all(req.params.id);
+// Edit group name (admin only)
+app.put('/api/groups/:id', auth, (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Nome obrigatório' });
 
-  res.json(members.map(m => ({
-    ...m,
-    isAdmin: group && m.id === group.owner_id
-  })));
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+  if (group.owner_id !== req.user.userId) return res.status(403).json({ error: 'Apenas o admin pode editar o grupo' });
+
+  db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name.trim(), req.params.id);
+  broadcast(req.params.id, 'group:updated', { id: req.params.id, name: name.trim() });
+  res.json({ ok: true, name: name.trim() });
+});
+
+// Delete group (admin only)
+app.delete('/api/groups/:id', auth, (req, res) => {
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado' });
+  if (group.owner_id !== req.user.userId) return res.status(403).json({ error: 'Apenas o admin pode deletar o grupo' });
+
+  // Broadcast before deleting
+  broadcast(req.params.id, 'group:deleted', { id: req.params.id });
+
+  // Delete in order (foreign keys)
+  const pollIds = db.prepare('SELECT id FROM polls WHERE group_id = ?').all(req.params.id).map(p => p.id);
+  pollIds.forEach(pollId => {
+    db.prepare('DELETE FROM votes WHERE poll_id = ?').run(pollId);
+  });
+  db.prepare('DELETE FROM polls WHERE group_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM group_members WHERE group_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM groups WHERE id = ?').run(req.params.id);
+
+  res.json({ ok: true });
 });
 
 // Admin: remove member
@@ -260,7 +336,7 @@ app.post('/api/groups/:id/leave', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── POLLS ROUTES ────────────────────────────────────────────────────────────
+// ─── POLLS ROUTES ─────────────────────────────────────────────────────────────
 
 app.post('/api/polls', auth, (req, res) => {
   const { question, options, deadline, groupId, mode } = req.body;
@@ -281,7 +357,7 @@ app.post('/api/polls', auth, (req, res) => {
   broadcast(groupId, 'poll:new', poll);
 
   sendPushToGroup(groupId, req.user.userId, {
-    title: '🗳️ Nova votação no Bora!',
+    title: '🗳️ Nova votação no Bora?',
     body: question,
     data: { pollId: id }
   });
@@ -358,7 +434,7 @@ app.post('/api/polls/:id/close', auth, (req, res) => {
   res.json(updated);
 });
 
-// ─── PUSH NOTIFICATIONS ──────────────────────────────────────────────────────
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 
 app.post('/api/push/subscribe', auth, (req, res) => {
   const { subscription } = req.body;
@@ -384,21 +460,24 @@ function sendPushToGroup(groupId, excludeUserId, payload) {
   });
 }
 
-// ─── TEMPLATES ───────────────────────────────────────────────────────────────
+// ─── TEMPLATES ────────────────────────────────────────────────────────────────
 
 app.get('/api/templates', auth, (req, res) => {
   res.json([
-    { id: 1, name: 'Almoço', icon: '🍽️', question: 'Quem vai no almoço?', options: ['Vou', 'Não vou', 'Talvez'] },
-    { id: 2, name: 'Viagem', icon: '✈️', question: 'Quem topa a viagem?', options: ['Topo', 'Não posso', 'Talvez'] },
-    { id: 3, name: 'Presente', icon: '🎁', question: 'Quem entra no presente?', options: ['Entro', 'Não entro', 'Talvez'] },
-    { id: 4, name: 'Carona', icon: '🚗', question: 'Quem pode dar carona?', options: ['Posso', 'Não posso', 'Talvez'] },
-    { id: 5, name: 'Reunião', icon: '📅', question: 'Quem pode na reunião?', options: ['Posso', 'Não posso', 'Talvez'] },
-    { id: 6, name: 'Jantar', icon: '🍕', question: 'Quem vai no jantar?', options: ['Vou', 'Não vou', 'Talvez'] },
-    { id: 7, name: 'Evento', icon: '🎉', question: 'Quem vai ao evento?', options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 1,  name: 'Almoço',    icon: '🍽️',  question: 'Quem vai no almoço?',          options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 2,  name: 'Jantar',    icon: '🍕',  question: 'Quem vai no jantar?',           options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 3,  name: 'Viagem',    icon: '✈️',  question: 'Quem topa a viagem?',           options: ['Topo', 'Não posso', 'Talvez'] },
+    { id: 4,  name: 'Pedal',     icon: '🚴',  question: 'Quem vai no pedal?',            options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 5,  name: 'Carona',    icon: '🚗',  question: 'Quem pode dar carona?',         options: ['Posso', 'Não posso', 'Talvez'] },
+    { id: 6,  name: 'Presente',  icon: '🎁',  question: 'Quem entra no presente?',       options: ['Entro', 'Não entro', 'Talvez'] },
+    { id: 7,  name: 'Reunião',   icon: '📅',  question: 'Quem pode na reunião?',         options: ['Posso', 'Não posso', 'Talvez'] },
+    { id: 8,  name: 'Evento',    icon: '🎉',  question: 'Quem vai ao evento?',           options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 9,  name: 'Churrasco', icon: '🥩',  question: 'Quem vai no churrasco?',        options: ['Vou', 'Não vou', 'Talvez'] },
+    { id: 10, name: 'Futebol',   icon: '⚽',  question: 'Quem joga no futebol?',         options: ['Jogo', 'Não jogo', 'Talvez'] },
   ]);
 });
 
-// ─── HELPER ──────────────────────────────────────────────────────────────────
+// ─── HELPER ───────────────────────────────────────────────────────────────────
 
 function getPollWithStats(pollId, userId) {
   const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(pollId);
@@ -421,12 +500,12 @@ function getPollWithStats(pollId, userId) {
   const winner = isClosed ? Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] : null;
 
   const respondedUsers = db.prepare(`
-    SELECT u.id, u.name, u.avatar FROM users u
+    SELECT u.id, u.name, u.avatar, u.avatar_url FROM users u
     INNER JOIN votes v ON u.id = v.user_id WHERE v.poll_id = ?
   `).all(pollId);
 
   const pendingUsers = db.prepare(`
-    SELECT u.id, u.name, u.avatar FROM users u
+    SELECT u.id, u.name, u.avatar, u.avatar_url FROM users u
     INNER JOIN group_members gm ON u.id = gm.user_id
     WHERE gm.group_id = ? AND u.id NOT IN (SELECT user_id FROM votes WHERE poll_id = ?)
   `).all(poll.group_id, pollId);
@@ -450,20 +529,20 @@ function getPollWithStats(pollId, userId) {
     userVote,
     totalVotes: votes.length,
     memberCount,
-    respondedUsers,
-    pendingUsers,
+    respondedUsers: respondedUsers.map(u => ({ ...u, avatarUrl: u.avatar_url || null })),
+    pendingUsers: pendingUsers.map(u => ({ ...u, avatarUrl: u.avatar_url || null })),
     canClose,
     createdAt: poll.created_at
   };
 }
 
-// Serve frontend
+// Serve frontend SPA
 app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 server.listen(PORT, () => {
-  console.log(`Bora! server running on port ${PORT}`);
+  console.log(`Bora? server running on port ${PORT}`);
 });
 
 module.exports = { app, broadcast };

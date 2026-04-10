@@ -198,8 +198,14 @@ export default function GroupDetail() {
           <div className="space-y-3">
             {group.members?.map(member => (
               <div key={member.id} className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-teal-700 font-bold text-sm flex-shrink-0">
-                  {member.avatar || member.name?.charAt(0).toUpperCase()}
+                <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">
+                      {member.avatar || member.name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">
