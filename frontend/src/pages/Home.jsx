@@ -61,9 +61,23 @@ export default function Home() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Recarrega quando o usuário volta para a tela (ex: após criar votação)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadData();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadData]);
+
   const handleWsMessage = useCallback(({ event, data }) => {
     if (event === 'poll:new') {
-      setPolls((prev) => [data, ...prev.filter((p) => p.id !== data.id)]);
+      // Adiciona no topo, evitando duplicatas
+      setPolls((prev) => {
+        const exists = prev.some((p) => p.id === data.id);
+        if (exists) return prev.map((p) => p.id === data.id ? data : p);
+        return [data, ...prev];
+      });
     } else if (event === 'poll:updated') {
       setPolls((prev) => prev.map((p) => (p.id === data.id ? data : p)));
     }

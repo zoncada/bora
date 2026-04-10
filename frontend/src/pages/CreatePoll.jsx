@@ -130,32 +130,60 @@ export default function CreatePoll() {
               </div>
             ) : (
               <div className="space-y-3">
-                {groups.map((g) => (
-                  <button
-                    key={g.id}
-                    onClick={() => { setGroupId(g.id); setStep(2); }}
-                    className={`w-full rounded-2xl p-4 text-left flex items-center gap-3 transition-all border-2 ${
-                      groupId === g.id
-                        ? 'border-teal-400 bg-teal-50'
-                        : 'border-transparent bg-gray-50 active:bg-teal-50'
-                    }`}
-                  >
-                    <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
-                      👥
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-gray-900">{g.name}</p>
-                      <p className="text-xs text-gray-400">{g.memberCount} {g.memberCount === 1 ? 'membro' : 'membros'}</p>
-                    </div>
-                    {groupId === g.id ? (
-                      <span className="text-teal-500 text-lg">✓</span>
-                    ) : (
-                      <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
+                {groups.map((g) => {
+                  const hasEnoughMembers = g.memberCount >= 2;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => {
+                        if (!hasEnoughMembers) return;
+                        setGroupId(g.id); setStep(2);
+                      }}
+                      disabled={!hasEnoughMembers}
+                      className={`w-full rounded-2xl p-4 text-left flex items-center gap-3 transition-all border-2 ${
+                        !hasEnoughMembers
+                          ? 'border-transparent bg-gray-50 opacity-50 cursor-not-allowed'
+                          : groupId === g.id
+                            ? 'border-teal-400 bg-teal-50'
+                            : 'border-transparent bg-gray-50 active:bg-teal-50'
+                      }`}
+                    >
+                      <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+                        👥
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-900">{g.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {g.memberCount} {g.memberCount === 1 ? 'membro' : 'membros'}
+                          {!hasEnoughMembers && <span className="text-orange-400 ml-1">· Convide alguém primeiro</span>}
+                        </p>
+                      </div>
+                      {groupId === g.id ? (
+                        <span className="text-teal-500 text-lg">✓</span>
+                      ) : hasEnoughMembers ? (
+                        <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      ) : (
+                        <span className="text-orange-400 text-sm">🔒</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Aviso se todos os grupos têm apenas 1 membro */}
+            {!loadingGroups && groups.length > 0 && groups.every(g => g.memberCount < 2) && (
+              <div className="mt-4 bg-orange-50 border border-orange-200 rounded-2xl p-4 text-center">
+                <p className="text-orange-700 text-sm font-semibold">👥 Convide alguém para o grupo!</p>
+                <p className="text-orange-500 text-xs mt-1">Votações precisam de pelo menos 2 membros.</p>
+                <button
+                  className="mt-3 text-sm font-semibold text-teal-600 bg-teal-50 px-4 py-2 rounded-xl"
+                  onClick={() => navigate('/profile')}
+                >
+                  Ir para Perfil e convidar
+                </button>
               </div>
             )}
           </div>
