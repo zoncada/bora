@@ -397,24 +397,25 @@ app.post('/api/polls', auth, (req, res) => {
 });
 
 app.get('/api/polls', auth, (req, res) => {
-  const { groupId, status } = req.query;
-
-  let query = `
-    SELECT p.* FROM polls p
-    INNER JOIN group_members gm ON p.group_id = gm.group_id
-    WHERE gm.user_id = ?
-  `;
-  const params = [req.user.userId];
-
-  if (groupId) { query += ' AND p.group_id = ?'; params.push(groupId); }
-  if (status === 'open') query += ' AND (p.closed = 0 AND (p.deadline IS NULL OR p.deadline > datetime("now")))';
-  if (status === 'closed') query += ' AND (p.closed = 1 OR (p.deadline IS NOT NULL AND p.deadline <= datetime("now")))';
-
-  query += ' ORDER BY p.created_at DESC';
-
-  const polls = db.prepare(query).all(...params);
-  const result = polls.map(p => getPollWithStats(p.id, req.user.userId));
-  res.json(result);
+  try {
+    const { groupId, status } = req.query;
+    let query = `
+      SELECT p.* FROM polls p
+      INNER JOIN group_members gm ON p.group_id = gm.group_id
+      WHERE gm.user_id = ?
+    `;
+    const params = [req.user.userId];
+    if (groupId) { query += ' AND p.group_id = ?'; params.push(groupId); }
+    if (status === 'open') query += ' AND (p.closed = 0 AND (p.deadline IS NULL OR p.deadline > CURRENT_TIMESTAMP))';
+    if (status === 'closed') query += ' AND (p.closed = 1 OR (p.deadline IS NOT NULL AND p.deadline <= CURRENT_TIMESTAMP))';
+    query += ' ORDER BY p.created_at DESC';
+    const polls = db.prepare(query).all(...params);
+    const result = polls.map(p => getPollWithStats(p.id, req.user.userId)).filter(Boolean);
+    res.json(result);
+  } catch (err) {
+    console.error('[GET /api/polls] Erro:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar votações: ' + err.message });
+  }
 });
 
 app.get('/api/polls/:id', auth, (req, res) => {

@@ -59,6 +59,33 @@ export default function CreatePoll() {
     if (options.length > 2) setOptions(options.filter((_, i) => i !== idx));
   };
 
+  // Rascunho no localStorage
+  const DRAFT_KEY = 'bora_poll_draft';
+  const saveDraft = () => {
+    if (question.trim() || options.some(o => o.trim())) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ groupId, question, options, deadline, mode }));
+    }
+  };
+  const clearDraft = () => localStorage.removeItem(DRAFT_KEY);
+
+  // Restaurar rascunho ao montar
+  useEffect(() => {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        if (d.question) setQuestion(d.question);
+        if (d.options?.length >= 2) setOptions(d.options);
+        if (d.deadline) setDeadline(d.deadline);
+        if (d.mode) setMode(d.mode);
+        if (d.groupId) setGroupId(d.groupId);
+        // Vai direto para o step de detalhes se tinha rascunho completo
+        if (d.question && d.groupId) setStep(4);
+      } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async () => {
     const validOptions = options.filter((o) => o.trim());
     if (!groupId) { setError('Selecione o grupo'); return; }
@@ -75,7 +102,8 @@ export default function CreatePoll() {
         groupId,
         mode,
       });
-      navigate(`/poll/${data.id}`);
+      clearDraft(); // Limpa rascunho após criar com sucesso
+      navigate('/home');
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao criar votação');
       setLoading(false);
@@ -84,7 +112,10 @@ export default function CreatePoll() {
 
   const goBack = () => {
     if (step === 1) navigate(-1);
-    else setStep(step - 1);
+    else {
+      if (step === 4) saveDraft(); // Salva rascunho ao sair do step final
+      setStep(step - 1);
+    }
   };
 
   const selectedGroup = groups.find(g => g.id === groupId);

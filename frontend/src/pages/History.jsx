@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
 import AppHeader from '../components/AppHeader';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import api from '../utils/api';
 
 export default function History() {
@@ -31,6 +32,25 @@ export default function History() {
   }, []);
 
   useEffect(() => { loadPolls(); }, [loadPolls]);
+
+  // Recarregar ao voltar para a tela
+  useEffect(() => {
+    const onVisible = () => { if (!document.hidden) loadPolls(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadPolls]);
+
+  // WebSocket: atualiza polls em tempo real
+  const handleWsMessage = useCallback(({ event, data }) => {
+    if (event === 'poll:updated') {
+      setPolls(prev => prev.map(p => p.id === data.id ? data : p));
+    } else if (event === 'poll:deleted') {
+      setPolls(prev => prev.filter(p => p.id !== data.pollId));
+    } else if (event === 'poll:new') {
+      setPolls(prev => [data, ...prev.filter(p => p.id !== data.id)]);
+    }
+  }, []);
+  useWebSocket(handleWsMessage);
 
   const filteredPolls = polls.filter((p) => {
     if (filter === 'open') return !p.closed;
