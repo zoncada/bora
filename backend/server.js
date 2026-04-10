@@ -417,11 +417,11 @@ app.post('/api/polls/:id/vote', auth, (req, res) => {
     db.prepare('INSERT INTO votes (id, poll_id, user_id, option) VALUES (?, ?, ?, ?)').run(uuidv4(), req.params.id, req.user.userId, option);
   }
 
-  // Check if all members voted (mode: all)
+  // Check if all members voted (mode: all) — só encerra se há votos E todos votaram
   if (poll.mode === 'all') {
     const memberCount = db.prepare('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?').get(poll.group_id).c;
     const voteCount = db.prepare('SELECT COUNT(*) as c FROM votes WHERE poll_id = ?').get(req.params.id).c;
-    if (voteCount >= memberCount) {
+    if (voteCount > 0 && voteCount >= memberCount) {
       db.prepare('UPDATE polls SET closed = 1 WHERE id = ?').run(req.params.id);
     }
   }
@@ -509,7 +509,9 @@ function getPollWithStats(pollId, userId) {
   const isExpired = poll.deadline && new Date(poll.deadline) < new Date();
   const isClosed = poll.closed === 1 || isExpired;
 
-  const winner = isClosed ? Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] : null;
+  // Winner só existe se fechado E há pelo menos 1 voto
+  const totalVoteCount = votes.length;
+  const winner = (isClosed && totalVoteCount > 0) ? Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] : null;
 
   const respondedUsers = db.prepare(`
     SELECT u.id, u.name, u.avatar, u.avatar_url FROM users u

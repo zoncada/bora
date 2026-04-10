@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../utils/api';
 
 export default function Auth() {
   const [mode, setMode] = useState('login');
@@ -13,6 +14,8 @@ export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const joinCode = searchParams.get('join');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -24,12 +27,15 @@ export default function Auth() {
         if (!name.trim()) { setError('Digite seu nome'); setLoading(false); return; }
         await register(name.trim(), email, password);
       }
-      const joinCode = searchParams.get('join');
+      // Se veio de link de convite, entra no grupo automaticamente
       if (joinCode) {
-        navigate(`/group-setup?code=${joinCode}`);
-      } else {
-        navigate('/home');
+        try {
+          await api.post('/api/groups/join', { inviteCode: joinCode.toUpperCase() });
+        } catch (joinErr) {
+          // Ignora se já é membro ou código inválido — vai para Home de qualquer forma
+        }
       }
+      navigate('/home', { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Algo deu errado. Tente novamente.');
     } finally {
@@ -42,6 +48,17 @@ export default function Auth() {
       <div className="pt-12 pb-6 flex flex-col items-center">
         {/* Logo oficial */}
         <img src="/logo.png" alt="Bora?" className="w-44 mb-6" />
+
+        {/* Banner de convite */}
+        {joinCode && (
+          <div className="w-full bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3 mb-3 text-center">
+            <p className="text-teal-700 text-sm font-semibold">🎉 Você foi convidado para um grupo!</p>
+            <p className="text-teal-500 text-xs mt-0.5">
+              {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta'} para entrar automaticamente.
+            </p>
+          </div>
+        )}
+
         <h2 className="text-2xl font-bold text-gray-900">
           {mode === 'login' ? 'Bem-vindo de volta' : 'Criar conta'}
         </h2>
@@ -88,7 +105,12 @@ export default function Auth() {
         )}
 
         <button type="submit" className="btn-primary mt-2" disabled={loading}>
-          {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
+          {loading
+            ? (joinCode ? 'Entrando no grupo...' : 'Aguarde...')
+            : mode === 'login'
+              ? (joinCode ? 'Entrar e aceitar convite →' : 'Entrar')
+              : (joinCode ? 'Criar conta e aceitar convite →' : 'Criar conta')
+          }
         </button>
 
         <div className="flex items-center gap-3 my-2">
